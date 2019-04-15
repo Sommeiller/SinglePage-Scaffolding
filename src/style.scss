@@ -105,9 +105,9 @@ table {
 	color: #fff;
 }
 html,body{
-	height: 100%;
-	overflow:hidden;
-
+	// height: 100%;
+	// overflow:hidden;
+	
 }
 
 body{
@@ -116,6 +116,10 @@ body{
 	-webkit-text-size-adjust: none;
 	font-family: "SourceSansPro-Regular";
 	color: #fff;
-	overflow: hidden;
+	// overflow: hidden;
 	background: #3c3c3c;
+	&.initing{
+		opacity: 0;
+		visibility: hidden;
+	}
 }

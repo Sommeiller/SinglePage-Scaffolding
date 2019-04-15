@@ -1,90 +1,126 @@
-// var moduleArr = ['intro','landscape','scenes','lives','contact'];
-var currentUrl, rootUrl, baseUrl;
-var currentModuleName = '';
-var currentDom;
-var currentIndex = 0;
+import 'whatwg-fetch';
 
-import 'pubsub-js';
+class router {
+	constructor() {
+		this._baseURL = './';
+		this.currentMoudle = '';
+		this.currentIndex = 0;
 
-export default class router {
-	constructor(env) {
-		this.env = env;
-		this.moduleArr = ['example','webgl'];
-		this.initIndex = 0;
-	}
-	routerUrl(url){
-		rootUrl = (this.env==='prod')?"":"";
-		currentUrl = url;
-		currentModuleName = this.getModuleName(url,rootUrl);
+		this.rootUrl = PRODUCTION ? "/build" : "";
 
-		console.log('currentModuleName:  '+currentModuleName);
-
-		if (currentModuleName == '') {
-			baseUrl = './';
-		} else {
-			baseUrl = '../';
+		this.rules = [{
+			path: '/',
+			initPage: 'example1',
+			pages: ['example1', 'example2', 'example3']
+		}, {
+			path: '/example',
+			initPage: 'example1',
+			pages: ['example1', 'example2', 'example3']
+		}, {
+			path: '/example1',
+			initPage: 'example1',
+			pages: ['example1', 'example2', 'example3']
+		}, {
+			path: '/example2',
+			initPage: 'example2',
+			pages: ['example1', 'example2', 'example3']
+		}, {
+			path: '/example3',
+			initPage: 'example3',
+			pages: ['example1', 'example2', 'example3']
 		}
-		currentDom = $('<div>').addClass('fullpage').prependTo($('body'));
-		this.loadModules();
+		];
 	}
+	async resolveURL(_url) {
+		let path = this.getPath(_url);
 
-	getModuleName(_url,_rootUrl){
-		var tmpModuleName = '';
-		var parser = document.createElement('a');
-		parser.href = _url;
-
-		tmpModuleName = parser.pathname.substr(_rootUrl.length).replace(/[\/]/g,'');
-
-		return tmpModuleName;
-	}
-
-	loadModules(){
-		var self = this;
-		if(currentModuleName!=this.moduleArr[currentIndex]){
-			$.get(baseUrl+this.moduleArr[currentIndex]+'/index.html').done(function(html){
-				html = html.substr(html.indexOf('<section'),html.indexOf('</section>') - html.indexOf('<section')+ 10);
-				html = html.replace(/\.+\//g,baseUrl);
-				if(currentIndex == 0){
-					currentDom.prepend(html);
-				}else{
-					currentDom.after(html);
+		if (path === '/' || path === '/index') {
+			this._baseURL = './';
+		} else {
+			this._baseURL = '../';
+		}
+		let rule;
+		for (let i = 0, l = this.rules.length; i < l; i++) {
+			if (this.rules[i].path === path) {
+				rule = this.rules[i];
+				let allPromises = this.loadPages(rule.pages, rule.skip_id);
+				for (let promise of allPromises) {
+					await promise;
 				}
-				requestAnimationFrame(function(){
-					if(currentIndex<self.moduleArr.length-1){
-						currentDom = $('section.'+self.moduleArr[currentIndex]);
-						currentIndex = currentIndex+1;
-						self.loadModules();
-					}else{
-						PubSub.publish('html_injection_complete');
+			}
+		}
+
+
+		return rule;
+	}
+	loadPages(_pages, _skip_id) {
+		// let mainStory = document.getElementsByClassName('main-story')[0];
+
+		let allPromises = [];
+		let currentHtml = '';
+		// let preHtml = '';
+		// let postHtml = '';
+
+		let local = this;
+		_pages.map((item, index) => {
+			if (index != _skip_id) {
+				let tmpPromise = new Promise((resolve, reject) => {
+					try {
+						console.log('begin load page -- ' + item);
+						fetch(`${local._baseURL}${item}/index.html`).then((response) => {
+							if (response.ok) {
+								return response.text();
+							} else {
+								reject();
+							}
+						}).then((html) => {
+							if (html) {
+								html = html.substr(html.indexOf('<section'), html.indexOf('</section>') - html.indexOf('<section') + 10);
+
+								// if(index<_skip_id){
+								// 	preHtml = preHtml+html;
+								// }else{
+								// 	postHtml = postHtml+html
+								// }
+
+								currentHtml = currentHtml + html;
+								// if (_skip_id === -1 && index == _pages.length - 1 
+								// 	|| _skip_id!==_pages.length - 1 && index === _pages.length - 1
+								// 	|| _skip_id === _pages.length - 1 && index === _pages.length - 2) {
+								// 	currentHtml = preHtml+currentHtml+postHtml;
+								// 	document.getElementsByClassName('main-story')[0].innerHTML = currentHtml;
+								// }
+
+								if (index === _pages.length - 1) {
+									document.getElementsByClassName('main-story')[0].innerHTML = currentHtml;
+								}
+								resolve();
+							} else {
+								reject();
+							}
+						}).catch((e) => {
+							console.log(e);
+							reject();
+						});
+					} catch (e) {
+						console.log(e);
 					}
 				});
-			}).fail(function() {
-				console.log('ajax error');
-			});
-		}else{
-			this.initIndex = currentIndex;
-			var tmpSelfDom = $('section.'+this.moduleArr[currentIndex]);
-			if(currentIndex == 0){
-				currentDom.prepend(tmpSelfDom);
-			}else{
-				currentDom.after(tmpSelfDom);
-			}
-			currentDom = tmpSelfDom;
-			if(currentIndex<this.moduleArr.length-1){
-				currentIndex = currentIndex+1;
-				self.loadModules();
-			}else{
-				PubSub.publish('html_injection_complete');
-			}
 
-
-		}
+				allPromises.push(tmpPromise);
+			}
+		});
+		return allPromises;
+	}
+	getPath(_url) {
+		let parser = document.createElement('a');
+		parser.href = _url;
+		return `/${parser.pathname.substr(this.rootUrl.length).replace(/[\/]/g, '')}`;
 	}
 
-	get baseUrl() {
-		return baseUrl;
-	}
-	get rootUrl() {
-		return rootUrl;
+	get baseURL() {
+		return this._baseURL;
 	}
 }
+
+export default new router();
